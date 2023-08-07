@@ -9,8 +9,8 @@ contract VeritrustFactory {
 
     event contractDeployed(Veritrust contractAddress);
 
-    function deployVeritrust(string memory _name) public {
-        Veritrust veritrustContract = new Veritrust(_name);
+    function deployVeritrust(string memory _name, string memory _ipfsUrl, uint256 _deadline) public {
+        Veritrust veritrustContract = new Veritrust(_name, _ipfsUrl, _deadline);
         veritrustContracts.push(veritrustContract);
 
         emit contractDeployed(veritrustContract);
