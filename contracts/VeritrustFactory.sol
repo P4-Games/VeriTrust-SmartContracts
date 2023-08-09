@@ -7,13 +7,13 @@ contract VeritrustFactory {
 
     Veritrust[] private veritrustContracts;
 
-    event contractDeployed(Veritrust contractAddress);
+    event contractDeployed(Veritrust contractAddress, address owner);
 
     function deployVeritrust(string memory _name, string memory _ipfsUrl, uint256 _deadline) public {
-        Veritrust veritrustContract = new Veritrust(_name, _ipfsUrl, _deadline);
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _deadline);
         veritrustContracts.push(veritrustContract);
 
-        emit contractDeployed(veritrustContract);
+        emit contractDeployed(veritrustContract, msg.sender);
     }
 
     function getContracts() public view returns(Veritrust[] memory){
