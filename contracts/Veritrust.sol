@@ -17,7 +17,6 @@ contract Veritrust is Ownable {
         bytes32 urlHash;
         string url;
         uint256 timestamp;
-        uint256 price;
         uint256 version;
         bool revealed;
     }
@@ -66,16 +65,14 @@ contract Veritrust is Ownable {
      * @dev Places a bid in the contract.
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
-     * @param _price The bid price.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash, uint256 _price) public beforeDeadline {
+    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeDeadline {
         // require(bids[msg.sender].timestamp == 0, "Bid already placed");
         require(bidders.length < 101, "Up to 100 bidders only");
         
         bids[msg.sender].timestamp = block.timestamp;
         bids[msg.sender].bidder = _bidderName;
         bids[msg.sender].urlHash = _urlHash;
-        bids[msg.sender].price = _price;
         bids[msg.sender].version++;
 
         bidders.push(msg.sender);
