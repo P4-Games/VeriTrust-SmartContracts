@@ -70,10 +70,11 @@ contract Veritrust is Ownable {
         // require(bids[msg.sender].timestamp == 0, "Bid already placed");
         require(bidders.length < 101, "Up to 100 bidders only");
         
-        bids[msg.sender].timestamp = block.timestamp;
-        bids[msg.sender].bidder = _bidderName;
-        bids[msg.sender].urlHash = _urlHash;
-        bids[msg.sender].version++;
+        Bid storage bid = bids[msg.sender];
+        bid.timestamp = block.timestamp;
+        bid.bidder = _bidderName;
+        bid.urlHash = _urlHash;
+        bid.version++;
 
         bidders.push(msg.sender);
 
@@ -87,12 +88,13 @@ contract Veritrust is Ownable {
      * @param _url The URL associated with the bid.
      */
     function revealBid(string memory _url) public afterDeadline {
-        require(bids[msg.sender].timestamp > 0, "Bid doesnt exist");
-        require(uint256(keccak256(abi.encodePacked(_url))) == uint256(bids[msg.sender].urlHash));
-        bids[msg.sender].url = _url;
-        bids[msg.sender].revealed = true;
+        Bid storage bid = bids[msg.sender];
+        require(bid.timestamp > 0, "Bid doesnt exist");
+        require(uint256(keccak256(abi.encodePacked(_url))) == uint256(bid.urlHash));
+        bid.url = _url;
+        bid.revealed = true;
 
-        emit BidRevealed(bids[msg.sender]);
+        emit BidRevealed(bid);
     }
 
     /**
