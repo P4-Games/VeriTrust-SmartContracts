@@ -14,10 +14,11 @@ contract Veritrust is Ownable {
 
     struct Bid {
         string bidder;
-        bytes32 urlHash;
         string url;
+        bytes32 urlHash;
         uint256 timestamp;
         uint256 version;
+        address bidderAddress;
         bool revealed;
     }
 
@@ -102,6 +103,7 @@ contract Veritrust is Ownable {
         bid.timestamp = block.timestamp;
         bid.bidder = _bidderName;
         bid.urlHash = _urlHash;
+        bid.bidderAddress = msg.sender;
         bid.version++;
 
         bidders.push(msg.sender);
@@ -148,7 +150,7 @@ contract Veritrust is Ownable {
 
         (bool success, ) = payable(msg.sender).call{value: address(this).balance}("");
         require(success, "Transfer failed");
-                
+
         emit Winner(name, _winner, ipfsUrl);
     }
 
@@ -188,8 +190,15 @@ contract Veritrust is Ownable {
      * @dev Gets the list of bidders who participated in the bidding process.
      * @return An array containing the addresses of bidders.
      */
-    function getBidders() public view afterCommitDeadline returns (address[] memory) {
-        return bidders;
+    function getBidders() public view afterCommitDeadline returns (Bid[] memory) {
+        Bid[] memory bidList = new Bid[](bidders.length);
+        for (uint256 i = 0; i < bidders.length;) {
+            bidList[i] = bids[bidders[i]];
+            unchecked {
+                i++;
+            }
+        }
+        return bidList;
     }
 
     /**
