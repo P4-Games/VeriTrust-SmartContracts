@@ -30,8 +30,8 @@ contract VeritrustFactory {
      * @param _name The name of the Veritrust contract.
      * @param _ipfsUrl The IPFS URL associated with the contract.
      */
-    function deployVeritrust(string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline) public payable {
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee);
+    function deployVeritrust(string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline, uint256 warrantyAmount) public payable {
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
         
         require(msg.value == deployFee, "Incorrect payment fee");

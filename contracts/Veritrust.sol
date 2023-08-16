@@ -32,15 +32,17 @@ contract Veritrust is Ownable {
     mapping(address bidder => Bid bidData) private bids;
     address[] private bidders;
     uint256 private startBid;
+    uint256 public validBids;
     
     address payable private factoryContract;
     uint256 public bidFee;
+    uint256 public warrantyAmount;
 
     event BidRevealed(Bid bid);
     event Winner(string name, address winner, string ipfsUrl);
     event CommitDeadlineExtended(uint256 newDeadline);
     event RevealDeadlineExtended(uint256 newDeadline);
-    event BidCancelled(address indexed bidder);
+    event BidCancelled();
 
     modifier beforeCommitDeadline {
         require(block.timestamp < startBid + commitDeadline, "Commit deadline has passed");
@@ -71,7 +73,7 @@ contract Veritrust is Ownable {
      * @param _revealDeadline seconds past commit until reveal is posssible.
      * @param _bidFee Fee value for bids.
      */
-    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline, uint256 _bidFee) {
+    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline, uint256 _bidFee, uint256 _warrantyAmount) {
         require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
         require(_revealDeadline > 1 days, "Reveal deadline must be greater than 1 day");
         transferOwnership(_owner);
@@ -82,6 +84,7 @@ contract Veritrust is Ownable {
         revealDeadline = _revealDeadline;
         factoryContract = payable(msg.sender);
         bidFee = _bidFee;
+        warrantyAmount = _warrantyAmount;
     }
 
     /**
@@ -89,9 +92,9 @@ contract Veritrust is Ownable {
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline() payable {
+    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline payable {
         require(bidders.length < 101, "Up to 100 bidders only");
-        require(msg.value == bidFee, "Incorrect payment fee");
+        require(msg.value == bidFee + warrantyAmount, "Incorrect payment fee");
 
         Bid storage bid = bids[msg.sender];
         require(bid.version == 0, "Bid already exist");
@@ -103,11 +106,11 @@ contract Veritrust is Ownable {
 
         bidders.push(msg.sender);
 
-        (bool success, ) = factoryContract.call{ value: msg.value }("");
+        (bool success, ) = factoryContract.call{ value: bidFee }("");
         require(success, "Fee transfer fail");
     }
 
-    function updateBid(bytes32 _urlHash) public beforeCommitDeadline()  {
+    function updateBid(bytes32 _urlHash) public beforeCommitDeadline  {
         Bid storage bid = bids[msg.sender];
         require(bid.version > 0, "Bid doesn't exist");
         
@@ -116,38 +119,21 @@ contract Veritrust is Ownable {
         bid.version++;
     }
 
-    function cancelBid() public beforeCommitDeadline {
-        uint16 i;
-        uint256 length = bidders.length;
-        for(i;i<length;){
-            if(bidders[i] == msg.sender){
-                bidders[i] = bidders[length -1];
-                bidders.pop();
-                break;
-            }
-            unchecked {
-                i++;
-            }
-        }
-
-        require(length > bidders.length, "Bid not found");
-        
-        delete bids[msg.sender];
-        
-        // devolver $$$
-        emit BidCancelled(msg.sender);
-    }
-
     /**
      * @dev Reveals a bid after the deadline has passed.
      * @param _url The URL associated with the bid.
      */
     function revealBid(string memory _url) public afterCommitDeadline beforeRevealDeadline {
         Bid storage bid = bids[msg.sender];
-        require(bid.timestamp > 0, "Bid doesnt exist");
+        require(bid.version > 0, "Bid doesnt exist");
+        require(bid.revealed == false, "Bid already revealed");
         require(uint256(keccak256(abi.encodePacked(_url))) == uint256(bid.urlHash));
         bid.url = _url;
         bid.revealed = true;
+        validBids++;
+
+        (bool success, ) = payable(msg.sender).call{value: warrantyAmount}("");
+        require(success, "Transfer failed");
 
         emit BidRevealed(bid);
     }
@@ -159,15 +145,27 @@ contract Veritrust is Ownable {
     function choseWinner(address _winner) public onlyOwner afterRevealDeadline {
         require(bids[msg.sender].revealed == true, "Bid not yet revealed");
         winner = _winner;
-        
+
+        (bool success, ) = payable(msg.sender).call{value: address(this).balance}("");
+        require(success, "Transfer failed");
+                
         emit Winner(name, _winner, ipfsUrl);
+    }
+
+    function cancelBids() public onlyOwner afterRevealDeadline {
+        require(validBids == 0, "There are valid bids");
+        
+        (bool success, ) = payable(msg.sender).call{value: address(this).balance}("");
+        require(success, "Transfer failed");
+
+        emit BidCancelled();
     }
     
     /**
      * @dev Extends the deadline of the contract.
      * @param _newDeadline The new deadline timestamp.
      */
-    function extenCommitDeadline(uint128 _newDeadline) public onlyOwner beforeCommitDeadline {
+    function extendCommitDeadline(uint128 _newDeadline) public onlyOwner beforeCommitDeadline {
         require(_newDeadline > commitDeadline, "Deadlines can only be extended");
         commitDeadline = _newDeadline;
 
@@ -178,7 +176,7 @@ contract Veritrust is Ownable {
      * @dev Extends the deadline of the contract.
      * @param _newDeadline The new deadline timestamp.
      */
-    function extenRevealDeadline(uint128 _newDeadline) public onlyOwner beforeRevealDeadline {
+    function extendRevealDeadline(uint128 _newDeadline) public onlyOwner beforeRevealDeadline {
         // chequear que no haya ningun reveal aun
         require(_newDeadline > revealDeadline, "Deadlines can only be extended");
         revealDeadline = _newDeadline;
@@ -201,5 +199,7 @@ contract Veritrust is Ownable {
     function getNumberOfBidders() public view returns(uint256) {
         return bidders.length;
     }
+
+    receive() external payable {}
 
 }
