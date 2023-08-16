@@ -188,7 +188,7 @@ contract Veritrust is Ownable {
     
     /**
      * @dev Gets the list of bidders who participated in the bidding process.
-     * @return An array containing the addresses of bidders.
+     * @return An array containing the list of bids.
      */
     function getBidders() public view afterCommitDeadline returns (Bid[] memory) {
         Bid[] memory bidList = new Bid[](bidders.length);
