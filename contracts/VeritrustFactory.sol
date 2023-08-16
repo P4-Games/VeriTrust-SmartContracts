@@ -22,10 +22,9 @@ contract VeritrustFactory {
      * @dev Deploys a new Veritrust contract.
      * @param _name The name of the Veritrust contract.
      * @param _ipfsUrl The IPFS URL associated with the contract.
-     * @param _deadline The deadline for the contract.
      */
-    function deployVeritrust(string memory _name, string memory _ipfsUrl, uint256 _deadline) public {
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _deadline);
+    function deployVeritrust(string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline) public {
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline);
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender);

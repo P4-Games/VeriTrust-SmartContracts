@@ -26,23 +26,37 @@ contract Veritrust is Ownable {
 
     string public name;
     string public ipfsUrl;
-    uint256 deadline;
+    uint128 commitDeadline;
+    uint128 revealDeadline;
     address public winner;
     mapping(address bidder => Bid bidData) private bids;
     address[] private bidders;
-
+    uint256 private startBid;
+    
     event NewBid(string bidder);
     event BidRevealed(Bid bid);
     event Winner(string name, address winner, string ipfsUrl);
-    event DeadlineExtended(uint256 newDeadline);
+    event CommitDeadlineExtended(uint256 newDeadline);
+    event RevealDeadlineExtended(uint256 newDeadline);
+    event BidCancelled(address indexed bidder);
 
-    modifier beforeDeadline {
-        require(block.timestamp < deadline, "Deadline has passed");
+    modifier beforeCommitDeadline {
+        require(block.timestamp < startBid + commitDeadline, "Commit deadline has passed");
         _;
     }
 
-    modifier afterDeadline {
-        require(block.timestamp >= deadline, "Wait until deadline");
+    modifier afterCommitDeadline {
+        require(block.timestamp >= startBid + commitDeadline, "Wait until commit deadline");
+        _;
+    }
+
+    modifier beforeRevealDeadline {
+        require(block.timestamp < startBid + commitDeadline + revealDeadline, "Reveal deadline has passed");
+        _;
+    }
+
+    modifier afterRevealDeadline {
+        require(block.timestamp >= startBid + commitDeadline + revealDeadline, "Wait until reveal deadline");
         _;
     }
 
@@ -51,14 +65,18 @@ contract Veritrust is Ownable {
      * @param _owner The address that will initially own the contract.
      * @param _name The name of the Veritrust contract.
      * @param _ipfsUrl The IPFS URL associated with the contract.
-     * @param _deadline The deadline timestamp for the contract.
+     * @param _commitDeadline seconds until commit is possible.
+     * @param _revealDeadline seconds past commit until reveal is posssible.
      */
-    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint256 _deadline) {
-        require(_deadline > block.timestamp, "Deadline must be in the future");
+    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline) {
+        require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
+        require(_revealDeadline > 1 days, "Reveal deadline must be greater than 1 day");
         transferOwnership(_owner);
         name = _name;
         ipfsUrl = _ipfsUrl;
-        deadline = _deadline;
+        startBid = block.timestamp;
+        commitDeadline =  _commitDeadline;
+        revealDeadline = _revealDeadline;
     }
 
     /**
@@ -66,7 +84,7 @@ contract Veritrust is Ownable {
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeDeadline {
+    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline {
         // require(bids[msg.sender].timestamp == 0, "Bid already placed");
         require(bidders.length < 101, "Up to 100 bidders only");
         
@@ -81,13 +99,33 @@ contract Veritrust is Ownable {
         emit NewBid(_bidderName);
     }
 
-    function cancelBid() public {}
+    function cancelBid() public beforeCommitDeadline {
+        uint16 i;
+        uint256 length = bidders.length;
+        for(i;i<length;){
+            if(bidders[i] == msg.sender){
+                bidders[i] = bidders[length -1];
+                bidders.pop();
+                break;
+            }
+            unchecked {
+                i++;
+            }
+        }
+
+        require(length > bidders.length, "Bid not found");
+        
+        delete bids[msg.sender];
+        
+        // devolver $$$
+        emit BidCancelled(msg.sender);
+    }
 
     /**
      * @dev Reveals a bid after the deadline has passed.
      * @param _url The URL associated with the bid.
      */
-    function revealBid(string memory _url) public afterDeadline {
+    function revealBid(string memory _url) public afterCommitDeadline beforeRevealDeadline {
         Bid storage bid = bids[msg.sender];
         require(bid.timestamp > 0, "Bid doesnt exist");
         require(uint256(keccak256(abi.encodePacked(_url))) == uint256(bid.urlHash));
@@ -100,34 +138,42 @@ contract Veritrust is Ownable {
     /**
      * @dev Selects the winner of the bid and sets their address.
      * @param _winner The address of the selected winner.
-     * @return The address of the selected winner.
      */
-    function choseWinner(address _winner) public onlyOwner afterDeadline returns (address) {
+    function choseWinner(address _winner) public onlyOwner afterRevealDeadline {
         require(bids[msg.sender].revealed == true, "Bid not yet revealed");
         winner = _winner;
         
         emit Winner(name, _winner, ipfsUrl);
-
-        return _winner;
     }
     
     /**
      * @dev Extends the deadline of the contract.
      * @param _newDeadline The new deadline timestamp.
      */
-    function extendDeadline(uint256 _newDeadline) public onlyOwner {
-        // chequear que no haya ningun reveal aun
-        require(_newDeadline > deadline, "Deadlines can only be extended");
-        deadline = _newDeadline;
+    function extenCommitDeadline(uint128 _newDeadline) public onlyOwner beforeCommitDeadline {
+        require(_newDeadline > commitDeadline, "Deadlines can only be extended");
+        commitDeadline = _newDeadline;
 
-        emit DeadlineExtended(_newDeadline);
+        emit CommitDeadlineExtended(startBid + _newDeadline);
+    }
+
+    /**
+     * @dev Extends the deadline of the contract.
+     * @param _newDeadline The new deadline timestamp.
+     */
+    function extenRevealDeadline(uint128 _newDeadline) public onlyOwner beforeRevealDeadline {
+        // chequear que no haya ningun reveal aun
+        require(_newDeadline > revealDeadline, "Deadlines can only be extended");
+        revealDeadline = _newDeadline;
+
+        emit RevealDeadlineExtended(startBid + commitDeadline + _newDeadline);
     }
     
     /**
      * @dev Gets the list of bidders who participated in the bidding process.
      * @return An array containing the addresses of bidders.
      */
-    function getBidders() public view afterDeadline returns (address[] memory) {
+    function getBidders() public view afterCommitDeadline returns (address[] memory) {
         return bidders;
     }
 
