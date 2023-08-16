@@ -33,7 +33,9 @@ contract Veritrust is Ownable {
     address[] private bidders;
     uint256 private startBid;
     
-    event NewBid(string bidder);
+    address payable private factoryContract;
+    uint256 public bidFee;
+
     event BidRevealed(Bid bid);
     event Winner(string name, address winner, string ipfsUrl);
     event CommitDeadlineExtended(uint256 newDeadline);
@@ -67,8 +69,9 @@ contract Veritrust is Ownable {
      * @param _ipfsUrl The IPFS URL associated with the contract.
      * @param _commitDeadline seconds until commit is possible.
      * @param _revealDeadline seconds past commit until reveal is posssible.
+     * @param _bidFee Fee value for bids.
      */
-    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline) {
+    constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline, uint256 _bidFee) {
         require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
         require(_revealDeadline > 1 days, "Reveal deadline must be greater than 1 day");
         transferOwnership(_owner);
@@ -77,6 +80,8 @@ contract Veritrust is Ownable {
         startBid = block.timestamp;
         commitDeadline =  _commitDeadline;
         revealDeadline = _revealDeadline;
+        factoryContract = payable(msg.sender);
+        bidFee = _bidFee;
     }
 
     /**
@@ -84,11 +89,13 @@ contract Veritrust is Ownable {
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline {
-        // require(bids[msg.sender].timestamp == 0, "Bid already placed");
+    function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline() payable {
         require(bidders.length < 101, "Up to 100 bidders only");
-        
+        require(msg.value == bidFee, "Incorrect payment fee");
+
         Bid storage bid = bids[msg.sender];
+        require(bid.version == 0, "Bid already exist");
+        
         bid.timestamp = block.timestamp;
         bid.bidder = _bidderName;
         bid.urlHash = _urlHash;
@@ -96,7 +103,17 @@ contract Veritrust is Ownable {
 
         bidders.push(msg.sender);
 
-        emit NewBid(_bidderName);
+        (bool success, ) = factoryContract.call{ value: msg.value }("");
+        require(success, "Fee transfer fail");
+    }
+
+    function updateBid(bytes32 _urlHash) public beforeCommitDeadline()  {
+        Bid storage bid = bids[msg.sender];
+        require(bid.version > 0, "Bid doesn't exist");
+        
+        bid.timestamp = block.timestamp;
+        bid.urlHash = _urlHash;
+        bid.version++;
     }
 
     function cancelBid() public beforeCommitDeadline {
