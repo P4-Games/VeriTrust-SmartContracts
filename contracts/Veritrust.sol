@@ -3,9 +3,6 @@ pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// chequeo de la cantidad de participantes y la cantidad de reveals
-// modificar estas listas si se cancela una bid
-
 /**
  * @title Veritrust
  * @dev This contract handles the bidding process and winner selection for a tender.
@@ -21,9 +18,6 @@ contract Veritrust is Ownable {
         address bidderAddress;
         bool revealed;
     }
-
-    // enum Status{open, closed, finished}
-    // Status public tenderStatus;
 
     string public name;
     string public ipfsUrl;
