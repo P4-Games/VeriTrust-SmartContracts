@@ -61,7 +61,8 @@ contract VeritrustFactory {
             /*uint timeStamp*/,
             /*uint80 answeredInRound*/
         ) = dataFeed.latestRoundData();
-        return answer;
+        uint decimals = 18 - dataFeed.decimals();
+        return answer * int(10 ** decimals);
     }
 
     receive() external payable {

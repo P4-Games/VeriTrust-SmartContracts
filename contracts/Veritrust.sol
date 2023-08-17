@@ -35,7 +35,7 @@ contract Veritrust is Ownable {
     uint256 public validBids;
     
     address payable private factoryContract;
-    uint256 public bidFee;
+    uint256 private bidFee;
     uint256 public warrantyAmount;
 
     event BidRevealed(Bid bid);
@@ -94,7 +94,8 @@ contract Veritrust is Ownable {
      */
     function setBid(string memory _bidderName, bytes32 _urlHash) public beforeCommitDeadline payable {
         require(bidders.length < 101, "Up to 100 bidders only");
-        require(msg.value == bidFee + warrantyAmount, "Incorrect payment fee");
+        uint256 bidCost = getBidCost();
+        require(msg.value == bidCost, "Incorrect payment fee");
 
         Bid storage bid = bids[msg.sender];
         require(bid.version == 0, "Bid already exist");
@@ -107,7 +108,8 @@ contract Veritrust is Ownable {
 
         bidders.push(msg.sender);
 
-        (bool success, ) = factoryContract.call{ value: bidFee }("");
+
+        (bool success, ) = factoryContract.call{ value: bidCost - warrantyAmount }("");
         require(success, "Fee transfer fail");
     }
 
@@ -133,7 +135,7 @@ contract Veritrust is Ownable {
         bid.revealed = true;
         validBids++;
 
-        (bool success, ) = payable(msg.sender).call{value: warrantyAmount}("");
+        (bool success, ) = payable(msg.sender).call{ value: warrantyAmount }("");
         require(success, "Transfer failed");
 
         emit BidRevealed(bid);
@@ -209,10 +211,9 @@ contract Veritrust is Ownable {
     }
 
     function getBidCost() public view returns(uint256) {
-        int etherPrice = IVeritrustFactory(factoryContract).getLatestData();
-        return uint256(int(bidFee + warrantyAmount) / etherPrice);
+        int256 etherPrice = IVeritrustFactory(factoryContract).getLatestData();
+        return uint256(int256(bidFee * 1 ether) / etherPrice) + warrantyAmount;
     }
 
     receive() external payable {}
-
 }
