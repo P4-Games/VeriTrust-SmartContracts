@@ -3,10 +3,15 @@ pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface IVeritrustFactory {
+    function getLatestData() external view returns (int);
+}
+
 /**
  * @title Veritrust
  * @dev This contract handles the bidding process and winner selection for a tender.
  */
+
 contract Veritrust is Ownable {
 
     struct Bid {
@@ -201,6 +206,11 @@ contract Veritrust is Ownable {
      */
     function getNumberOfBidders() public view returns(uint256) {
         return bidders.length;
+    }
+
+    function getBidCost() public view returns(uint256) {
+        int etherPrice = IVeritrustFactory(factoryContract).getLatestData();
+        return uint256(int(bidFee + warrantyAmount) / etherPrice);
     }
 
     receive() external payable {}
