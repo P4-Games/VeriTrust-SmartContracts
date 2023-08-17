@@ -1,3 +1,4 @@
+const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const { expect } = require("chai");
 const { getContractAddress } = require("ethers/lib/utils");
 const { ethers } = require("hardhat");
@@ -10,13 +11,16 @@ describe("Veritrust Smart Contract", function () {
   const bidFee = ethers.utils.parseEther("5");
   const deployFee = ethers.utils.parseEther("50");
   const warrantyAmount = ethers.utils.parseEther("1");
+  const commitDeadline = 172800;
+  const revealDeadline = 172800;
+
 
   const deployVeritrust = async () => {
     const tx = await veritrustFactory.connect(licitante).deployVeritrust(
       "Veritrust Test",
       "www.com.ar",
-      172800,
-      172800,
+      commitDeadline,
+      revealDeadline,
       warrantyAmount,
     { value: deployFee })
     
@@ -85,5 +89,52 @@ describe("Veritrust Smart Contract", function () {
     
     expect(newBalance).to.equal(initialBalance);
   });
+
+  it("reveal and all is correct", async function () {
+    const bidderName = "Bidder1";
+    const url = "https://veritrust/secret";
+    const urlHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(url));
+    const veritrust = await deployVeritrust();
+   
+    const bidCost = await veritrust.getBidCost();
+    
+    await veritrust.connect(bidder).setBid(bidderName, urlHash, { value: bidCost });
+    const initialBalance = await ethers.provider.getBalance(bidder.address);
+    
+    await time.increase(commitDeadline);
   
+    const tx = await veritrust.connect(bidder).revealBid(url);
+    const receipt = await tx.wait();
+    const gasUsed = BigInt(receipt.cumulativeGasUsed) * BigInt(receipt.effectiveGasPrice);
+    
+    const veritrustBalance = await ethers.provider.getBalance(veritrust.address);
+    expect(0).to.equal(veritrustBalance);
+
+    const newBalance = await ethers.provider.getBalance(bidder.address);
+
+    expect(newBalance).to.equal(initialBalance.add(warrantyAmount).sub(gasUsed));
+  });
+
+
+  it("reveal and choose winner", async function () {
+    const bidderName = "Bidder1";
+    const url = "https://veritrust/secret";
+    const urlHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(url));
+    const veritrust = await deployVeritrust();
+   
+    const bidCost = await veritrust.getBidCost();
+    
+    await veritrust.connect(bidder).setBid(bidderName, urlHash, { value: bidCost });
+    const initialBalance = await ethers.provider.getBalance(bidder.address);
+    
+    await time.increase(commitDeadline);
+  
+    const tx = await veritrust.connect(bidder).revealBid(url);
+    await tx.wait();
+    await time.increase(revealDeadline);
+
+    await veritrust.connect(licitante).choseWinner(bidder.address);
+
+  });
+
 });

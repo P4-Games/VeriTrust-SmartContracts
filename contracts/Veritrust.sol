@@ -146,7 +146,7 @@ contract Veritrust is Ownable {
      * @param _winner The address of the selected winner.
      */
     function choseWinner(address _winner) public onlyOwner afterRevealDeadline {
-        require(bids[msg.sender].revealed == true, "Bid not yet revealed");
+        require(bids[_winner].revealed == true, "Bid not yet revealed");
         winner = _winner;
 
         (bool success, ) = payable(msg.sender).call{value: address(this).balance}("");
