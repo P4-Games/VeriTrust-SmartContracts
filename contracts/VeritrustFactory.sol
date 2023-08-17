@@ -2,12 +2,15 @@
 pragma solidity 0.8.19;
 
 import "./Veritrust.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title VeritrustFactory
  * @dev This contract acts as a factory for creating Veritrust contracts.
  */
 contract VeritrustFactory {
+
+    AggregatorV3Interface internal dataFeed;
 
     Veritrust[] private veritrustContracts;
     uint256 public deployFee;
@@ -20,9 +23,11 @@ contract VeritrustFactory {
      */
     event ContractDeployed(Veritrust contractAddress, address owner);
     
-    constructor(uint256 _deployFee, uint256 _bidFee) {
+    constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress) {
         deployFee = _deployFee;
         bidFee = _bidFee;
+        // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+        dataFeed = AggregatorV3Interface(_chainlinkAddress);
     }
     
     /**
@@ -45,6 +50,18 @@ contract VeritrustFactory {
      */
     function getContracts() public view returns (Veritrust[] memory){
         return veritrustContracts;
+    }
+
+    function getLatestData() public view returns (int) {
+        // prettier-ignore
+        (
+            /* uint80 roundID */,
+            int answer,
+            /*uint startedAt*/,
+            /*uint timeStamp*/,
+            /*uint80 answeredInRound*/
+        ) = dataFeed.latestRoundData();
+        return answer;
     }
 
     receive() external payable {
