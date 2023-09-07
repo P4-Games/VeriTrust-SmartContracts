@@ -8,11 +8,10 @@ optimizer_runs = 20000
 
 
 [fmt]
-line_length = 120
-tab_width = 2
-bracket_spacing = false
+line_length = 160
+tab_width = 4
+bracket_spacing = true
 int_types = 'long'
-quote_style = 'single'
 number_underscore = 'thousands'
 multiline_func_header = 'params_first'
 
