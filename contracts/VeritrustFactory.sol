@@ -2,13 +2,14 @@
 pragma solidity 0.8.19;
 
 import "./Veritrust.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title VeritrustFactory
  * @dev This contract acts as a factory for creating Veritrust contracts.
  */
-contract VeritrustFactory {
+contract VeritrustFactory is Ownable {
 
     AggregatorV3Interface internal dataFeed;
 
@@ -22,6 +23,7 @@ contract VeritrustFactory {
      * @param owner The owner who deployed the Veritrust contract.
      */
     event ContractDeployed(Veritrust contractAddress, address owner);
+    event FundsWithdrawn(uint256 balance);
     
     constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress) {
         deployFee = _deployFee;
@@ -44,6 +46,14 @@ contract VeritrustFactory {
         emit ContractDeployed(veritrustContract, msg.sender);
     }
 
+    function withdrawBalance() external onlyOwner {
+        uint256 balance = address(this).balance;
+        (bool success, ) = payable(msg.sender).call{value: balance}("");
+        require(success, "Transfer failed");
+        
+        emit FundsWithdrawn(balance);
+    }
+
     /**
      * @dev Retrieves the array of deployed Veritrust contracts.
      * @return An array containing references to deployed Veritrust contracts.
@@ -53,7 +63,6 @@ contract VeritrustFactory {
     }
 
     function getLatestData() public view returns (int) {
-        // prettier-ignore
         (
             /* uint80 roundID */,
             int answer,
@@ -65,6 +74,5 @@ contract VeritrustFactory {
         return answer * int(10 ** decimals);
     }
 
-    receive() external payable {
-    }
+    receive() external payable {}
 }

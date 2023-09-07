@@ -72,6 +72,7 @@ contract Veritrust is Ownable {
      * @param _commitDeadline seconds until commit is possible.
      * @param _revealDeadline seconds past commit until reveal is posssible.
      * @param _bidFee Fee value for bids.
+     * @param _warrantyAmount A warranty amount in eth that stays in the contract until reveal.
      */
     constructor(address _owner, string memory _name, string memory _ipfsUrl, uint128 _commitDeadline, uint128 _revealDeadline, uint256 _bidFee, uint256 _warrantyAmount) {
         require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
