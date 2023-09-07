@@ -5,6 +5,11 @@ coverage.json
 typechain
 typechain-types
 
+bin/
+build/
+cache/
+out/
+
 #Hardhat files
 cache
 artifacts
