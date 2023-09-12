@@ -27,7 +27,7 @@ contract VeritrustFactoryTest is Test {
         uint128 revealDeadline = 172_800;
         uint256 warrantyAmount = 1 ether;
 
-        factory.deployVeritrust{ value: 1 ether }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
+        factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
     }
 
     function testFuzz_SetNumber(uint256 x) public { }

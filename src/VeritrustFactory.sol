@@ -43,10 +43,10 @@ contract VeritrustFactory is Ownable {
         uint128 _revealDeadline,
         uint256 warrantyAmount
     ) public payable {
+        require(msg.value == getDeployCost(), "Incorrect payment fee");
+
         Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
-
-        require(msg.value == deployFee, "Incorrect payment fee");
 
         emit ContractDeployed(veritrustContract, msg.sender);
     }
@@ -65,6 +65,11 @@ contract VeritrustFactory is Ownable {
      */
     function getContracts() public view returns (Veritrust[] memory) {
         return veritrustContracts;
+    }
+
+    function getDeployCost() public view returns (uint256) {
+        int256 etherPrice = getLatestData();
+        return uint256(int256(deployFee * 1 ether) / etherPrice);
     }
 
     function getLatestData() public view returns (int256) {
