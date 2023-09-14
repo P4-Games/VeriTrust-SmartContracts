@@ -13,6 +13,7 @@ contract VeritrustFactory is Ownable {
     AggregatorV3Interface internal dataFeed;
 
     Veritrust[] private veritrustContracts;
+    address public metaPoolStakingAddress;
     uint256 public deployFee;
     uint256 public bidFee;
 
@@ -24,11 +25,12 @@ contract VeritrustFactory is Ownable {
     event ContractDeployed(Veritrust contractAddress, address owner);
     event FundsWithdrawn(uint256 balance);
 
-    constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress) {
+    constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress, address _metaPoolStakingAddress) {
         deployFee = _deployFee;
         bidFee = _bidFee;
         // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
         dataFeed = AggregatorV3Interface(_chainlinkAddress);
+        metaPoolStakingAddress = _metaPoolStakingAddress;
     }
 
     /**
@@ -45,7 +47,7 @@ contract VeritrustFactory is Ownable {
     ) public payable {
         require(msg.value == getDeployCost(), "Incorrect payment fee");
 
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, metaPoolStakingAddress, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender);
@@ -57,6 +59,11 @@ contract VeritrustFactory is Ownable {
         require(success, "Transfer failed");
 
         emit FundsWithdrawn(balance);
+    }
+
+    function setMetaPoolStakingAddress(address _newAddress) public onlyOwner {
+        require(_newAddress != address(0));
+        metaPoolStakingAddress = _newAddress;
     }
 
     /**
