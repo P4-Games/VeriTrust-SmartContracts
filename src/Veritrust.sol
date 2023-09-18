@@ -41,7 +41,7 @@ contract Veritrust is Ownable {
     address[] private bidders;
     uint256 private startBid;
     uint256 public validBids;
-    uint256 public totaWithdrawlBalance;
+    uint256 public totalWithdrawalBalance;
 
     address payable private factoryContract;
     uint256 private bidFee;
@@ -165,14 +165,14 @@ contract Veritrust is Ownable {
             uint256 maxStake = metaPoolStaking.maxWithdraw(address(this));
             uint256 requestWithdrawal = metaPoolStaking.withdraw(maxStake, address(this), address(this));
             require(requestWithdrawal > 0, "Withdrawal failed");
-            totaWithdrawlBalance = maxStake;
+            totalWithdrawalBalance = maxStake;
             metaPoolStaking.completeWithdraw();
 
-            (bool success,) = payable(msg.sender).call{ value: totaWithdrawlBalance / biddersLength }("");
+            (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / biddersLength }("");
             require(success, "Transfer failed");
 
         } else {
-            (bool success,) = payable(msg.sender).call{ value: totaWithdrawlBalance / biddersLength }("");
+            (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / biddersLength }("");
             require(success, "Transfer failed");
         }
 
