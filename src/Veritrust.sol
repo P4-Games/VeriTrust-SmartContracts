@@ -48,7 +48,7 @@ contract Veritrust is Ownable {
     uint128 private revealDeadline;
     address public winner;
     mapping(address bidder => Bid bidData) private bids;
-    mapping(address bidder => uint256 unlockTime) public warrantyUnlockTime;
+    uint256 public warrantyUnlockTime;
     address[] private bidders;
     uint256 private startBid;
     uint256 public validBids;
@@ -208,7 +208,7 @@ contract Veritrust is Ownable {
             require(requestWithdrawal > 0, "Withdrawal failed");
         }
 
-        warrantyUnlockTime[msg.sender] =
+        warrantyUnlockTime =
             withdrawal.getEpochStartTime(
                 withdrawal.pendingWithdraws[msg.sender].unlockEpoch
             ) +
