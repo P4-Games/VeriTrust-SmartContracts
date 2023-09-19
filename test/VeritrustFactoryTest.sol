@@ -67,7 +67,7 @@ contract VeritrustFactoryTest is Test {
         vm.startPrank(bob);
         veritrust.revealBid("http://bob");
 
-        vm.warp(block.timestamp + 10 days);
+        vm.warp(veritrust.warrantyUnlockTime());
 
         console.log("balance pre ", payable(withdrawal).balance);
         veritrust.claimWarranty();
