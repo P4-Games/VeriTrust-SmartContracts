@@ -30,6 +30,7 @@ contract Veritrust is Ownable {
         uint256 version;
         address bidderAddress;
         bool revealed;
+        bool warrantyClaimed;
     }
 
     Staking public metaPoolStaking;
@@ -126,6 +127,7 @@ contract Veritrust is Ownable {
         bid.bidder = _bidderName;
         bid.urlHash = _urlHash;
         bid.bidderAddress = msg.sender;
+        bid.warrantyClaimed = false;
         bid.version++;
 
         bidders.push(msg.sender);
@@ -171,6 +173,12 @@ contract Veritrust is Ownable {
 
     function claimWarranty() public afterRevealDeadline {
         Withdrawal withdrawal = Withdrawal(metaPoolStaking.withdrawal());
+        Bid storage bid = bids[msg.sender];
+        require(bid.version > 0, "Bid doesnt exist");
+        require(bid.revealed, "Bid not revealed");
+        require(!bid.warrantyClaimed, "Bid not revealed");
+        bid.warrantyClaimed = true;
+
         (uint256 amount, , ) = withdrawal.pendingWithdraws(address(this));
         if (amount > 0) {
             withdrawal.completeWithdraw();
