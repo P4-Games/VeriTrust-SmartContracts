@@ -11,8 +11,15 @@ interface IVeritrustFactory {
 
 interface IMetaPoolStaking {
     function depositETH(address _receiver) external payable returns (uint256);
+
     function maxWithdraw(address owner) external view returns (uint256);
-    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256);
+
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) external returns (uint256);
+
     function completeWithdraw() external;
 }
 
@@ -41,6 +48,7 @@ contract Veritrust is Ownable {
     uint128 private revealDeadline;
     address public winner;
     mapping(address bidder => Bid bidData) private bids;
+    mapping(address bidder => uint256 unlockTime) public warrantyUnlockTime;
     address[] private bidders;
     uint256 private startBid;
     uint256 public validBids;
@@ -57,22 +65,34 @@ contract Veritrust is Ownable {
     event BidCancelled();
 
     modifier beforeCommitDeadline() {
-        require(block.timestamp < startBid + commitDeadline, "Commit deadline has passed");
+        require(
+            block.timestamp < startBid + commitDeadline,
+            "Commit deadline has passed"
+        );
         _;
     }
 
     modifier afterCommitDeadline() {
-        require(block.timestamp >= startBid + commitDeadline, "Wait until commit deadline");
+        require(
+            block.timestamp >= startBid + commitDeadline,
+            "Wait until commit deadline"
+        );
         _;
     }
 
     modifier beforeRevealDeadline() {
-        require(block.timestamp < startBid + commitDeadline + revealDeadline, "Reveal deadline has passed");
+        require(
+            block.timestamp < startBid + commitDeadline + revealDeadline,
+            "Reveal deadline has passed"
+        );
         _;
     }
 
     modifier afterRevealDeadline() {
-        require(block.timestamp >= startBid + commitDeadline + revealDeadline, "Wait until reveal deadline");
+        require(
+            block.timestamp >= startBid + commitDeadline + revealDeadline,
+            "Wait until reveal deadline"
+        );
         _;
     }
 
@@ -96,8 +116,14 @@ contract Veritrust is Ownable {
         uint256 _bidFee,
         uint256 _warrantyAmount
     ) {
-        require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
-        require(_revealDeadline > 1 days, "Reveal deadline must be greater than 1 day");
+        require(
+            _commitDeadline > 1 days,
+            "Commit deadline must be be greater than 1 day"
+        );
+        require(
+            _revealDeadline > 1 days,
+            "Reveal deadline must be greater than 1 day"
+        );
         transferOwnership(_owner);
         name = _name;
         ipfsUrl = _ipfsUrl;
@@ -115,7 +141,10 @@ contract Veritrust is Ownable {
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash) public payable beforeCommitDeadline {
+    function setBid(
+        string memory _bidderName,
+        bytes32 _urlHash
+    ) public payable beforeCommitDeadline {
         require(bidders.length < 101, "Up to 100 bidders only");
         uint256 bidCost = getBidCost();
         require(msg.value == bidCost, "Incorrect payment fee");
@@ -132,11 +161,15 @@ contract Veritrust is Ownable {
 
         bidders.push(msg.sender);
 
-        (bool success,) = factoryContract.call{ value: bidCost - warrantyAmount }("");
+        (bool success, ) = factoryContract.call{
+            value: bidCost - warrantyAmount
+        }("");
         require(success, "Fee transfer fail");
 
         // chequear si se pueden mandar varios depositos o hay que updatear
-        uint256 shares = metaPoolStaking.depositETH{ value: warrantyAmount }(address(this));
+        uint256 shares = metaPoolStaking.depositETH{value: warrantyAmount}(
+            address(this)
+        );
         require(shares > 0, "Staking failed");
     }
 
@@ -153,7 +186,10 @@ contract Veritrust is Ownable {
      * @dev Reveals a bid after the deadline has passed.
      * @param _url The URL associated with the bid.
      */
-    function revealBid(string memory _url) public afterCommitDeadline beforeRevealDeadline {
+    function revealBid(
+        string memory _url
+    ) public afterCommitDeadline beforeRevealDeadline {
+        Withdrawal withdrawal = Withdrawal(metaPoolStaking.withdrawal());
         Bid storage bid = bids[msg.sender];
         require(bid.version > 0, "Bid doesnt exist");
         require(bid.revealed == false, "Bid already revealed");
@@ -164,9 +200,19 @@ contract Veritrust is Ownable {
 
         if (validBids == 1) {
             uint256 maxStake = metaPoolStaking.maxWithdraw(address(this));
-            uint256 requestWithdrawal = metaPoolStaking.withdraw(maxStake, address(this), address(this));
+            uint256 requestWithdrawal = metaPoolStaking.withdraw(
+                maxStake,
+                address(this),
+                address(this)
+            );
             require(requestWithdrawal > 0, "Withdrawal failed");
         }
+
+        warrantyUnlockTime[msg.sender] =
+            withdrawal.getEpochStartTime(
+                withdrawal.pendingWithdraws[msg.sender].unlockEpoch
+            ) +
+            withdrawals.validatorsDisassembleTime();
 
         emit BidRevealed(bid);
     }
@@ -185,7 +231,9 @@ contract Veritrust is Ownable {
             totalWithdrawalBalance = payable(this).balance;
         }
 
-        (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / bidders.length }("");
+        (bool success, ) = payable(msg.sender).call{
+            value: totalWithdrawalBalance / bidders.length
+        }("");
         require(success, "Transfer failed");
     }
 
@@ -197,7 +245,9 @@ contract Veritrust is Ownable {
         require(bids[_winner].revealed == true, "Bid not yet revealed");
         winner = _winner;
 
-        (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
+        (bool success, ) = payable(msg.sender).call{
+            value: address(this).balance
+        }("");
         require(success, "Transfer failed");
 
         emit Winner(name, _winner, ipfsUrl);
@@ -206,7 +256,9 @@ contract Veritrust is Ownable {
     function cancelBids() public onlyOwner afterRevealDeadline {
         require(validBids == 0, "There are valid bids");
 
-        (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
+        (bool success, ) = payable(msg.sender).call{
+            value: address(this).balance
+        }("");
         require(success, "Transfer failed");
 
         emit BidCancelled();
@@ -216,8 +268,13 @@ contract Veritrust is Ownable {
      * @dev Extends the deadline of the contract.
      * @param _newDeadline The new deadline timestamp.
      */
-    function extendCommitDeadline(uint128 _newDeadline) public onlyOwner beforeCommitDeadline {
-        require(_newDeadline > commitDeadline, "Deadlines can only be extended");
+    function extendCommitDeadline(
+        uint128 _newDeadline
+    ) public onlyOwner beforeCommitDeadline {
+        require(
+            _newDeadline > commitDeadline,
+            "Deadlines can only be extended"
+        );
         commitDeadline = _newDeadline;
 
         emit CommitDeadlineExtended(startBid + _newDeadline);
@@ -227,9 +284,14 @@ contract Veritrust is Ownable {
      * @dev Extends the deadline of the contract.
      * @param _newDeadline The new deadline timestamp.
      */
-    function extendRevealDeadline(uint128 _newDeadline) public onlyOwner beforeRevealDeadline {
+    function extendRevealDeadline(
+        uint128 _newDeadline
+    ) public onlyOwner beforeRevealDeadline {
         // chequear que no haya ningun reveal aun
-        require(_newDeadline > revealDeadline, "Deadlines can only be extended");
+        require(
+            _newDeadline > revealDeadline,
+            "Deadlines can only be extended"
+        );
         revealDeadline = _newDeadline;
 
         emit RevealDeadlineExtended(startBid + commitDeadline + _newDeadline);
@@ -239,9 +301,14 @@ contract Veritrust is Ownable {
      * @dev Gets the list of bidders who participated in the bidding process.
      * @return An array containing the list of bids.
      */
-    function getBidders() public view afterCommitDeadline returns (Bid[] memory) {
+    function getBidders()
+        public
+        view
+        afterCommitDeadline
+        returns (Bid[] memory)
+    {
         Bid[] memory bidList = new Bid[](bidders.length);
-        for (uint256 i = 0; i < bidders.length;) {
+        for (uint256 i = 0; i < bidders.length; ) {
             bidList[i] = bids[bidders[i]];
             unchecked {
                 i++;
@@ -263,5 +330,5 @@ contract Veritrust is Ownable {
         return uint256(int256(bidFee * 1 ether) / etherPrice) + warrantyAmount;
     }
 
-    receive() external payable { }
+    receive() external payable {}
 }
