@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENCED
-pragma solidity 0.8.19;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./MetaPool/Staking.sol";
+import "./MetaPool/Withdrawal.sol";
 
 interface IVeritrustFactory {
     function getLatestData() external view returns (int256);
@@ -30,12 +32,12 @@ contract Veritrust is Ownable {
         bool revealed;
     }
 
-    IMetaPoolStaking public metaPoolStaking;
+    Staking public metaPoolStaking;
 
     string public name;
     string public ipfsUrl;
-    uint128 commitDeadline;
-    uint128 revealDeadline;
+    uint128 private commitDeadline;
+    uint128 private revealDeadline;
     address public winner;
     mapping(address bidder => Bid bidData) private bids;
     address[] private bidders;
@@ -102,7 +104,7 @@ contract Veritrust is Ownable {
         commitDeadline = _commitDeadline;
         revealDeadline = _revealDeadline;
         factoryContract = payable(msg.sender);
-        metaPoolStaking = IMetaPoolStaking(_metaPoolStakingAddress);
+        metaPoolStaking = Staking(payable(_metaPoolStakingAddress));
         bidFee = _bidFee;
         warrantyAmount = _warrantyAmount;
     }
@@ -132,9 +134,8 @@ contract Veritrust is Ownable {
         require(success, "Fee transfer fail");
 
         // chequear si se pueden mandar varios depositos o hay que updatear
-        uint256 shares = metaPoolStaking.depositETH{value: warrantyAmount}(address(this));
+        uint256 shares = metaPoolStaking.depositETH{ value: warrantyAmount }(address(this));
         require(shares > 0, "Staking failed");
-        
     }
 
     function updateBid(bytes32 _urlHash) public beforeCommitDeadline {
@@ -154,29 +155,30 @@ contract Veritrust is Ownable {
         Bid storage bid = bids[msg.sender];
         require(bid.version > 0, "Bid doesnt exist");
         require(bid.revealed == false, "Bid already revealed");
-        require(uint256(keccak256(abi.encodePacked(_url))) == uint256(bid.urlHash));
+        require(bytes32(keccak256(abi.encodePacked(_url))) == bid.urlHash);
         bid.url = _url;
         bid.revealed = true;
         validBids++;
 
-        uint256 biddersLength = bidders.length;
-
-        if(validBids == 1){
+        if (validBids == 1) {
             uint256 maxStake = metaPoolStaking.maxWithdraw(address(this));
             uint256 requestWithdrawal = metaPoolStaking.withdraw(maxStake, address(this), address(this));
             require(requestWithdrawal > 0, "Withdrawal failed");
-            totalWithdrawalBalance = maxStake;
-            metaPoolStaking.completeWithdraw();
-
-            (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / biddersLength }("");
-            require(success, "Transfer failed");
-
-        } else {
-            (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / biddersLength }("");
-            require(success, "Transfer failed");
         }
 
         emit BidRevealed(bid);
+    }
+
+    function claimWarranty() public afterRevealDeadline {
+        Withdrawal withdrawal = Withdrawal(metaPoolStaking.withdrawal());
+        (uint256 amount, , ) = withdrawal.pendingWithdraws(address(this));
+        if (amount > 0) {
+            withdrawal.completeWithdraw();
+            totalWithdrawalBalance = payable(this).balance;
+        }
+
+        (bool success,) = payable(msg.sender).call{ value: totalWithdrawalBalance / bidders.length }("");
+        require(success, "Transfer failed");
     }
 
     /**
