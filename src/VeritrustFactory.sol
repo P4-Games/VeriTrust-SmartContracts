@@ -25,11 +25,19 @@ contract VeritrustFactory is Ownable {
     event ContractDeployed(Veritrust contractAddress, address owner);
     event FundsWithdrawn(uint256 balance);
 
+    /// @notice Initializes the contract with the specified deployment and bid fees, Chainlink data feed address,
+    /// and Meta Pool Staking contract address.
+    /// @param _deployFee The deployment fee to set. Amount must be in USD with 18 decimals (e.g.: 50 USD = 50000000000000000000)
+    /// @param _bidFee The bid fee to set. Amount must be in USD with 18 decimals (e.g.: 5 USD = 5000000000000000000)
+    /// @param _chainlinkAddress The address of the Chainlink data feed contract.
+    /// @param _metaPoolStakingAddress The address of the Meta Pool Staking contract.
     constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress, address _metaPoolStakingAddress) {
         deployFee = _deployFee;
         bidFee = _bidFee;
-        // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+        // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 (Mainnet)
+        // 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e (Goerli)
         dataFeed = AggregatorV3Interface(_chainlinkAddress);
+        // 0x48AFbBd342F64EF8a9Ab1C143719b63C2AD81710 (Mainnet & Goerli)
         metaPoolStakingAddress = _metaPoolStakingAddress;
     }
 
@@ -37,6 +45,7 @@ contract VeritrustFactory is Ownable {
      * @dev Deploys a new Veritrust contract.
      * @param _name The name of the Veritrust contract.
      * @param _ipfsUrl The IPFS URL associated with the contract.
+     * @param warrantyAmount The amount of the warranty to be deposited by the seller. Amount is in ETH.
      */
     function deployVeritrust(
         string memory _name,
@@ -66,6 +75,10 @@ contract VeritrustFactory is Ownable {
         metaPoolStakingAddress = _newAddress;
     }
 
+    // function setDeployFee(uint256 _newFee) public onlyOwner {
+    //     deployFee = _newFee;
+    // }
+
     /**
      * @dev Retrieves the array of deployed Veritrust contracts.
      * @return An array containing references to deployed Veritrust contracts.
@@ -79,6 +92,7 @@ contract VeritrustFactory is Ownable {
         return uint256(int256(deployFee * 1 ether) / etherPrice);
     }
 
+    // returns e.g.: 1645416823290000000000
     function getLatestData() public view returns (int256) {
         (
             /* uint80 roundID */
