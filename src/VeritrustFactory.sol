@@ -13,7 +13,6 @@ contract VeritrustFactory is Ownable {
     AggregatorV3Interface internal dataFeed;
 
     Veritrust[] private veritrustContracts;
-    address public metaPoolStakingAddress;
     uint256 public deployFee;
     uint256 public bidFee;
 
@@ -30,15 +29,12 @@ contract VeritrustFactory is Ownable {
     /// @param _deployFee The deployment fee to set. Amount must be in USD with 18 decimals (e.g.: 50 USD = 50000000000000000000)
     /// @param _bidFee The bid fee to set. Amount must be in USD with 18 decimals (e.g.: 5 USD = 5000000000000000000)
     /// @param _chainlinkAddress The address of the Chainlink data feed contract.
-    /// @param _metaPoolStakingAddress The address of the Meta Pool Staking contract.
-    constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress, address _metaPoolStakingAddress) {
+    constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress) {
         deployFee = _deployFee;
         bidFee = _bidFee;
         // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 (Mainnet)
         // 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e (Goerli)
         dataFeed = AggregatorV3Interface(_chainlinkAddress);
-        // 0x48AFbBd342F64EF8a9Ab1C143719b63C2AD81710 (Mainnet & Goerli)
-        metaPoolStakingAddress = _metaPoolStakingAddress;
     }
 
     /**
@@ -56,7 +52,7 @@ contract VeritrustFactory is Ownable {
     ) public payable {
         require(msg.value == getDeployCost(), "Incorrect payment fee");
 
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, metaPoolStakingAddress, bidFee, warrantyAmount);
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender);
@@ -70,14 +66,13 @@ contract VeritrustFactory is Ownable {
         emit FundsWithdrawn(balance);
     }
 
-    function setMetaPoolStakingAddress(address _newAddress) public onlyOwner {
-        require(_newAddress != address(0));
-        metaPoolStakingAddress = _newAddress;
+    function setDeployFee(uint256 _newFee) public onlyOwner {
+        deployFee = _newFee;
     }
 
-    // function setDeployFee(uint256 _newFee) public onlyOwner {
-    //     deployFee = _newFee;
-    // }
+    function setBidFee(uint256 _newFee) public onlyOwner {
+        bidFee = _newFee;
+    }
 
     /**
      * @dev Retrieves the array of deployed Veritrust contracts.
@@ -87,6 +82,10 @@ contract VeritrustFactory is Ownable {
         return veritrustContracts;
     }
 
+    /**
+     * @dev Calculates the total deploy cost (set in USD) in ether.
+     * @return The total deploy cost in ether.
+     */
     function getDeployCost() public view returns (uint256) {
         int256 etherPrice = getLatestData();
         return uint256(int256(deployFee * 1 ether) / etherPrice);
