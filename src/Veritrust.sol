@@ -38,6 +38,7 @@ contract Veritrust is Ownable {
     uint256 private bidFee;
     uint256 public warrantyAmount;
 
+    event BidSet(address tender, address bidder);
     event BidRevealed(Bid bid);
     event Winner(string name, address winner, string ipfsUrl);
     event CommitDeadlineExtended(uint256 newDeadline);
@@ -120,6 +121,8 @@ contract Veritrust is Ownable {
 
         (bool success,) = factoryContract.call{ value: bidCost - warrantyAmount }("");
         require(success, "Fee transfer fail");
+
+        emit BidSet(address(this), msg.sender);
     }
 
     /**
