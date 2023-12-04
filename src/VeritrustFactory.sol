@@ -21,7 +21,7 @@ contract VeritrustFactory is Ownable {
      * @param contractAddress The address of the deployed Veritrust contract.
      * @param owner The owner who deployed the Veritrust contract.
      */
-    event ContractDeployed(Veritrust contractAddress, address owner, string ipfsUrl);
+    event ContractDeployed(Veritrust contractAddress, address owner, string name, string ipfsUrl);
     event FundsWithdrawn(uint256 balance);
 
     /// @notice Initializes the contract with the specified deployment and bid fees, Chainlink data feed address,
@@ -55,7 +55,7 @@ contract VeritrustFactory is Ownable {
         Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
 
-        emit ContractDeployed(veritrustContract, msg.sender, _ipfsUrl);
+        emit ContractDeployed(veritrustContract, msg.sender, _name, _ipfsUrl);
     }
 
     function withdrawBalance() external onlyOwner {
