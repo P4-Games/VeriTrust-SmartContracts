@@ -41,7 +41,7 @@ contract VeritrustFactory is Ownable {
      * @dev Deploys a new Veritrust contract.
      * @param _name The name of the Veritrust contract.
      * @param _ipfsUrl The IPFS URL associated with the contract.
-     * @param warrantyAmount The amount of the warranty to be deposited by the seller. Amount is in ETH.
+     * @param warrantyAmount The amount of the warranty to be deposited by the seller. Amount is in WEI.
      */
     function deployVeritrust(
         string memory _name,
