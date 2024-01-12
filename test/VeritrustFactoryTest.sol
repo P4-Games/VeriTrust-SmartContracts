@@ -5,8 +5,6 @@ import { Test, console } from "forge-std/Test.sol";
 import "../src/VeritrustFactory.sol";
 import { OracleMock } from "../src/OracleMock.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../src/MetaPool/Staking.sol";
-import "../src/MetaPool/Withdrawal.sol";
 
 contract VeritrustFactoryTest is Test {
     address owner = makeAddr("owner");
@@ -40,7 +38,7 @@ contract VeritrustFactoryTest is Test {
         uint128 revealDeadline = 172_800;
         uint256 warrantyAmount = 1 ether;
 
-        factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
+        factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount, address(0));
         Veritrust veritrust = factory.getContracts()[0];
 
         vm.startPrank(alice);

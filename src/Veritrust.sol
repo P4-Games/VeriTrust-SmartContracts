@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENCED
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IArbitrable } from "@kleros/erc-792/contracts/IArbitrable.sol";
+import { IArbitrator } from "@kleros/erc-792/contracts/IArbitrator.sol";
 
 interface IVeritrustFactory {
     function getLatestData() external view returns (int256);
@@ -12,7 +14,7 @@ interface IVeritrustFactory {
  * @dev This contract handles the bidding process and winner selection for a tender.
  */
 
-contract Veritrust is Ownable {
+contract Veritrust is IArbitrable, Ownable {
     struct Bid {
         string bidder;
         string url;
@@ -38,12 +40,42 @@ contract Veritrust is Ownable {
     uint256 private bidFee;
     uint256 public warrantyAmount;
 
+    //>>>>>>>   Kleros
+    IArbitrator public arbitrator;
+    uint256 public constant reclamationPeriod = 3 minutes; // Timeframe is short on purpose to be able to test it quickly. Not for production use.
+    uint256 public constant arbitrationFeeDepositPeriod = 3 minutes; // Timeframe is short on purpose to be able to test it quickly. Not for production use.
+    Status public status;
+    uint256 constant numberOfRulingOptions = 2; // Notice that option 0 is reserved for RefusedToArbitrate.
+
+    enum Status {
+        Initial,
+        Reclaimed,
+        Disputed,
+        Resolved
+    }
+
+    enum RulingOptions {
+        RefusedToArbitrate,
+        WinBidValid,
+        WinBidInvalid
+    }
+    //<<<<<<<   Kleros
+
     event BidSet(address tender, address bidder);
     event BidRevealed(Bid bid);
     event Winner(string name, address winner, string ipfsUrl);
     event CommitDeadlineExtended(uint256 newDeadline);
     event RevealDeadlineExtended(uint256 newDeadline);
     event BidCancelled();
+
+    error InvalidStatus();
+    error ReleasedTooEarly();
+    error NotArbitrator();
+    error PayeeDepositStillPending();
+    error ReclaimedTooLate();
+    error InsufficientPayment(uint256 _available, uint256 _required);
+    error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
+    error NotArbitrable();
 
     modifier beforeCommitDeadline() {
         require(block.timestamp < startBid + commitDeadline, "Commit deadline has passed");
@@ -82,7 +114,8 @@ contract Veritrust is Ownable {
         uint128 _commitDeadline,
         uint128 _revealDeadline,
         uint256 _bidFee,
-        uint256 _warrantyAmount
+        uint256 _warrantyAmount,
+        address _arbitrator
     ) {
         require(_commitDeadline > 1 days, "Commit deadline must be be greater than 1 day");
         require(_revealDeadline > 1 days, "Reveal deadline must be greater than 1 day");
@@ -95,6 +128,9 @@ contract Veritrust is Ownable {
         factoryContract = payable(msg.sender);
         bidFee = _bidFee;
         warrantyAmount = _warrantyAmount;
+        arbitrator = IArbitrator(_arbitrator);
+
+        status = Status.Initial;
     }
 
     /**
@@ -105,7 +141,7 @@ contract Veritrust is Ownable {
     function setBid(string memory _bidderName, bytes32 _urlHash) public payable beforeCommitDeadline {
         require(bidders.length < 101, "Up to 100 bidders");
         uint256 bidCost = getBidCost();
-        require(msg.value == bidCost, "Incorrect bid fee");
+        require(msg.value >= bidCost, "Insufficient bid fee");
 
         Bid storage bid = bids[msg.sender];
         require(bid.version == 0, "Bid already exists");
@@ -118,11 +154,16 @@ contract Veritrust is Ownable {
         bid.version++;
 
         bidders.push(msg.sender);
-        
+
         emit BidSet(address(this), msg.sender);
 
         (bool success,) = factoryContract.call{ value: bidCost - warrantyAmount }("");
         require(success, "Fee transfer fail");
+
+        if (msg.value > bidCost) {
+            (success,) = payable(msg.sender).call{ value: msg.value - bidCost }("");
+            require(success, "return excess transfer fail");
+        }
     }
 
     /**
@@ -150,10 +191,10 @@ contract Veritrust is Ownable {
         bid.url = _url;
         bid.revealed = true;
         validBids++;
-        
+
         emit BidRevealed(bid);
 
-        (bool success, ) = payable(msg.sender).call{value: warrantyAmount}("");
+        (bool success,) = payable(msg.sender).call{ value: warrantyAmount }("");
         require(success, "Warranty transfer failed");
     }
 
@@ -166,6 +207,18 @@ contract Veritrust is Ownable {
         winner = _winner;
 
         emit Winner(name, _winner, ipfsUrl);
+    }
+
+    function releaseBalance() public onlyOwner afterRevealDeadline {
+        if (status != Status.Initial) {
+            revert InvalidStatus();
+        }
+
+        if (block.timestamp < startBid + commitDeadline + revealDeadline + reclamationPeriod) {
+            revert ReleasedTooEarly();
+        }
+
+        status = Status.Resolved;
 
         (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
         require(success, "Transfer failed");
@@ -238,5 +291,45 @@ contract Veritrust is Ownable {
         return uint256(int256(bidFee * 1 ether) / etherPrice) + warrantyAmount;
     }
 
-    receive() external payable {}
+    function createDispute() external payable {
+        if (address(arbitrator) == address(0)) {
+            revert NotArbitrable();
+        }
+
+        if (status != Status.Reclaimed) {
+            revert InvalidStatus();
+        }
+
+        uint256 disputeCost = arbitrator.arbitrationCost("");
+        if (msg.value < disputeCost) {
+            revert InsufficientPayment(msg.value, disputeCost);
+        }
+
+        status = Status.Disputed;
+        arbitrator.createDispute{ value: disputeCost }(numberOfRulingOptions, "");
+
+        if (msg.value > disputeCost) {
+            (bool success,) = payable(msg.sender).call{ value: msg.value - disputeCost }("");
+            require(success, "return excess transfer fail");
+        }
+    }
+
+    function rule(uint256 _disputeID, uint256 _ruling) external override {
+        if (msg.sender != address(arbitrator)) {
+            revert NotArbitrator();
+        }
+        if (status != Status.Disputed) {
+            revert InvalidStatus();
+        }
+        if (_ruling > numberOfRulingOptions) {
+            revert InvalidRuling(_ruling, numberOfRulingOptions);
+        }
+
+        status = Status.Resolved;
+        emit Ruling(arbitrator, _disputeID, _ruling);
+
+        //TODO: Implementar que hacemos si hay disputa y que resolvemos en cada caso.
+    }
+
+    receive() external payable { }
 }

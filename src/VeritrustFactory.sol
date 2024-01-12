@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-import "./Veritrust.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import { Veritrust } from "./Veritrust.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
  * @title VeritrustFactory
@@ -48,11 +48,12 @@ contract VeritrustFactory is Ownable {
         string memory _ipfsUrl,
         uint128 _commitDeadline,
         uint128 _revealDeadline,
-        uint256 warrantyAmount
+        uint256 warrantyAmount,
+        address arbitrator
     ) public payable {
         require(msg.value == getDeployCost(), "Incorrect payment fee");
 
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount, arbitrator);
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender, _name, _ipfsUrl);
