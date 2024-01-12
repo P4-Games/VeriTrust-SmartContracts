@@ -30,7 +30,7 @@ contract VeritrustFactoryTest is Test {
         vm.startPrank(owner);
 
         oracle = new OracleMock();
-        factory = new VeritrustFactory(deployFee, bidFee, address(oracle), 0x48AFbBd342F64EF8a9Ab1C143719b63C2AD81710);
+        factory = new VeritrustFactory(deployFee, bidFee, address(oracle));
     }
 
     function test_Create_Veristrust() public {
@@ -43,12 +43,6 @@ contract VeritrustFactoryTest is Test {
         factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
         Veritrust veritrust = factory.getContracts()[0];
 
-
-        Staking staking = Staking(payable(0x48AFbBd342F64EF8a9Ab1C143719b63C2AD81710));
-        Withdrawal withdrawal = Withdrawal(staking.withdrawal()); 
-        vm.startPrank(withdrawal.owner());
-        withdrawal.setWithdrawalsStartEpoch(0);
-
         vm.startPrank(alice);
         veritrust.setBid{ value: veritrust.getBidCost() }("alice", bytes32(keccak256(abi.encodePacked("http://alice"))));
         assertEq(1, veritrust.getNumberOfBidders());
@@ -57,25 +51,14 @@ contract VeritrustFactoryTest is Test {
         veritrust.setBid{ value: veritrust.getBidCost() }("bob", bytes32(keccak256(abi.encodePacked("http://bob"))));
         assertEq(2, veritrust.getNumberOfBidders());
 
-        vm.startPrank(0x8c89569355F321A91655CA520fC09Be5f6B0Ec4D);
-        staking.requestEthFromLiquidPoolToWithdrawal(2.5 ether);
-
         vm.warp(block.timestamp + commitDeadline);
 
         vm.startPrank(alice);
+        console.log("balance veritrust", payable(veritrust).balance);
         veritrust.revealBid("http://alice");
+        console.log("balance veritrust reveal alice", payable(veritrust).balance);
         vm.startPrank(bob);
         veritrust.revealBid("http://bob");
-
-        vm.warp(veritrust.warrantyUnlockTime());
-
-        console.log("balance pre ", payable(withdrawal).balance);
-        veritrust.claimWarranty();
-        console.log("balance post", payable(withdrawal).balance);
-        
-        console.log("balance veritrust bob", payable(veritrust).balance);
-        vm.startPrank(alice);
-        veritrust.claimWarranty();
-        console.log("balance veritrust alice", payable(veritrust).balance);
+        console.log("balance veritrust reveal bob", payable(veritrust).balance);
     }
 }

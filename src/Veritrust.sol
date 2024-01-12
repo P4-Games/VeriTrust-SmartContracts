@@ -118,11 +118,11 @@ contract Veritrust is Ownable {
         bid.version++;
 
         bidders.push(msg.sender);
+        
+        emit BidSet(address(this), msg.sender);
 
         (bool success,) = factoryContract.call{ value: bidCost - warrantyAmount }("");
         require(success, "Fee transfer fail");
-
-        emit BidSet(address(this), msg.sender);
     }
 
     /**
@@ -150,11 +150,11 @@ contract Veritrust is Ownable {
         bid.url = _url;
         bid.revealed = true;
         validBids++;
+        
+        emit BidRevealed(bid);
 
         (bool success, ) = payable(msg.sender).call{value: warrantyAmount}("");
         require(success, "Warranty transfer failed");
-
-        emit BidRevealed(bid);
     }
 
     /**
@@ -165,10 +165,10 @@ contract Veritrust is Ownable {
         require(bids[_winner].revealed == true, "Bid not revealed");
         winner = _winner;
 
+        emit Winner(name, _winner, ipfsUrl);
+
         (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
         require(success, "Transfer failed");
-
-        emit Winner(name, _winner, ipfsUrl);
     }
 
     /**
@@ -177,10 +177,10 @@ contract Veritrust is Ownable {
     function cancelBids() public onlyOwner afterRevealDeadline {
         require(validBids == 0, "There are valid bids");
 
+        emit BidCancelled();
+
         (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
         require(success, "Transfer failed");
-
-        emit BidCancelled();
     }
 
     /**
