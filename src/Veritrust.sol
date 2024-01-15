@@ -42,22 +42,23 @@ contract Veritrust is IArbitrable, Ownable {
 
     //>>>>>>>   Kleros
     IArbitrator public arbitrator;
-    uint256 public constant reclamationPeriod = 3 minutes; // Timeframe is short on purpose to be able to test it quickly. Not for production use.
-    uint256 public constant arbitrationFeeDepositPeriod = 3 minutes; // Timeframe is short on purpose to be able to test it quickly. Not for production use.
+    uint256 public constant disputePeriod = 3 minutes; //TODO: ver si dejamos esto personalizable y en tal caso implementar los cambios
     Status public status;
+    RulingOptions public ruling;
     uint256 constant numberOfRulingOptions = 2; // Notice that option 0 is reserved for RefusedToArbitrate.
+    address payable disputeAddress;
 
     enum Status {
         Initial,
-        Reclaimed,
+        WinnerChosen,
         Disputed,
         Resolved
     }
 
     enum RulingOptions {
         RefusedToArbitrate,
-        WinBidValid,
-        WinBidInvalid
+        WinnerValid,
+        WinnerInvalid
     }
     //<<<<<<<   Kleros
 
@@ -71,7 +72,6 @@ contract Veritrust is IArbitrable, Ownable {
     error InvalidStatus();
     error ReleasedTooEarly();
     error NotArbitrator();
-    error PayeeDepositStillPending();
     error ReclaimedTooLate();
     error InsufficientPayment(uint256 _available, uint256 _required);
     error InvalidRuling(uint256 _ruling, uint256 _numberOfChoices);
@@ -138,7 +138,7 @@ contract Veritrust is IArbitrable, Ownable {
      * @param _bidderName The name of the bidder.
      * @param _urlHash The hash of the URL associated with the bid.
      */
-    function setBid(string memory _bidderName, bytes32 _urlHash) public payable beforeCommitDeadline {
+    function setBid(string memory _bidderName, bytes32 _urlHash) external payable beforeCommitDeadline {
         require(bidders.length < 101, "Up to 100 bidders");
         uint256 bidCost = getBidCost();
         require(msg.value >= bidCost, "Insufficient bid fee");
@@ -170,7 +170,7 @@ contract Veritrust is IArbitrable, Ownable {
      * @dev Updates a bid before the commit deadline.
      * @param _urlHash The URL's hash associated with the bid.
      */
-    function updateBid(bytes32 _urlHash) public beforeCommitDeadline {
+    function updateBid(bytes32 _urlHash) external beforeCommitDeadline {
         Bid storage bid = bids[msg.sender];
         require(bid.version > 0, "Bid doesn't exist");
 
@@ -183,7 +183,7 @@ contract Veritrust is IArbitrable, Ownable {
      * @dev Reveals a bid only between commit deadline and reveal deadline, returns warranty to the bidder.
      * @param _url The URL associated with the bid.
      */
-    function revealBid(string memory _url) public afterCommitDeadline beforeRevealDeadline {
+    function revealBid(string memory _url) external afterCommitDeadline beforeRevealDeadline {
         Bid storage bid = bids[msg.sender];
         require(bid.version > 0, "Bid doesnt exist");
         require(bid.revealed == false, "Bid already revealed");
@@ -202,26 +202,27 @@ contract Veritrust is IArbitrable, Ownable {
      * @dev Selects the winner of the bid and sets their address.
      * @param _winner The address of the selected winner.
      */
-    function choseWinner(address _winner) public onlyOwner afterRevealDeadline {
+    function choseWinner(address _winner) external payable onlyOwner afterRevealDeadline {
         require(bids[_winner].revealed == true, "Bid not revealed");
+        bool arbitrable = isArbitrable();
+        if (arbitrable) {
+            //TODO: vamos a exigir el costo exacto de arbitraje cuando se elige al ganador de garantia?
+            // Q el costo es fijo o es variable? si varia esto trae problemas.
+            uint256 cost = arbitrator.arbitrationCost("");
+            if (cost < msg.value) {
+                revert InsufficientPayment(msg.value, cost);
+            }
+        }
+
         winner = _winner;
+        status = Status.WinnerChosen;
 
         emit Winner(name, _winner, ipfsUrl);
-    }
 
-    function releaseBalance() public onlyOwner afterRevealDeadline {
-        if (status != Status.Initial) {
-            revert InvalidStatus();
+        if (!arbitrable) {
+            (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
+            require(success, "Transfer failed");
         }
-
-        if (block.timestamp < startBid + commitDeadline + revealDeadline + reclamationPeriod) {
-            revert ReleasedTooEarly();
-        }
-
-        status = Status.Resolved;
-
-        (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
-        require(success, "Transfer failed");
     }
 
     /**
@@ -291,12 +292,34 @@ contract Veritrust is IArbitrable, Ownable {
         return uint256(int256(bidFee * 1 ether) / etherPrice) + warrantyAmount;
     }
 
+    /**
+     * @dev Checks if there is a arbitrator
+     */
+    function isArbitrable() public view returns (bool) {
+        return address(arbitrator) != address(0);
+    }
+
+    /**
+     * @dev Get de arbitration cost if there is an arbitrator
+     * @return Cost of arbitration or 0
+     */
+    function arbitrationCost() external view returns (uint256) {
+        if (!isArbitrable()) {
+            return 0;
+        }
+        return arbitrator.arbitrationCost("");
+    }
+
+    /**
+     * @dev create a dispute if there is arbitrator
+     * and needs to pay the cost of arbitration
+     */
     function createDispute() external payable {
-        if (address(arbitrator) == address(0)) {
+        if (!isArbitrable()) {
             revert NotArbitrable();
         }
 
-        if (status != Status.Reclaimed) {
+        if (status != Status.WinnerChosen) {
             revert InvalidStatus();
         }
 
@@ -305,6 +328,7 @@ contract Veritrust is IArbitrable, Ownable {
             revert InsufficientPayment(msg.value, disputeCost);
         }
 
+        disputeAddress = payable(msg.sender);
         status = Status.Disputed;
         arbitrator.createDispute{ value: disputeCost }(numberOfRulingOptions, "");
 
@@ -314,6 +338,10 @@ contract Veritrust is IArbitrable, Ownable {
         }
     }
 
+    /**
+     * @dev callback for the arbitrator to set the ruling
+     * and process the result
+     */
     function rule(uint256 _disputeID, uint256 _ruling) external override {
         if (msg.sender != address(arbitrator)) {
             revert NotArbitrator();
@@ -321,14 +349,47 @@ contract Veritrust is IArbitrable, Ownable {
         if (status != Status.Disputed) {
             revert InvalidStatus();
         }
+
+        //TODO: es posible que recibamos RulingOptions.RefusedToArbitrate ?? que hacemos en este caso?
         if (_ruling > numberOfRulingOptions) {
             revert InvalidRuling(_ruling, numberOfRulingOptions);
         }
 
         status = Status.Resolved;
+        ruling = RulingOptions(_ruling);
         emit Ruling(arbitrator, _disputeID, _ruling);
 
-        //TODO: Implementar que hacemos si hay disputa y que resolvemos en cada caso.
+        if (ruling == RulingOptions.WinnerValid) {
+            (bool success,) = payable(owner()).call{ value: address(this).balance }("");
+            require(success, "Transfer failed");
+        } else if (ruling == RulingOptions.WinnerInvalid) {
+            //TODO: ver si enviamos el balance restante que puede incluir ofertas
+            //      no reveladas o solo reenbolsar el costo de la disputa
+            (bool success,) = disputeAddress.call{ value: address(this).balance }("");
+            require(success, "Transfer failed");
+        }
+    }
+
+    /**
+     * @dev Release the balance to the owner if no dispute or win it
+     */
+    function releaseBalance() external onlyOwner {
+        if (block.timestamp < startBid + commitDeadline + revealDeadline + disputePeriod) {
+            revert ReleasedTooEarly();
+        }
+
+        //TODO: confirmar que dejamos este metodo todos los casos y no solo para retirar si no hubo disputa.
+        //      Sino cambiarlo para que solo permita llamarlo cuando no hubo disputa despues del periodo de disputa.
+        if (status == Status.Disputed || status == Status.Initial) {
+            revert InvalidStatus();
+        }
+
+        if (status == Status.Resolved && ruling != RulingOptions.WinnerValid) {
+            revert InvalidStatus();
+        }
+
+        (bool success,) = payable(msg.sender).call{ value: address(this).balance }("");
+        require(success, "Transfer failed");
     }
 
     receive() external payable { }

@@ -15,12 +15,12 @@ contract VeritrustFactoryTest is Test {
     OracleMock oracle;
     uint256 deployFee = 1 ether;
     uint256 bidFee = 1 ether;
-    uint256 mainnetFork;
-    string MAINNET_RPC_URL = "https://eth.llamarpc.com";
+    //uint256 mainnetFork;
+    //string MAINNET_RPC_URL = "https://eth.llamarpc.com";
 
     function setUp() public {
-        mainnetFork = vm.createFork(MAINNET_RPC_URL);
-        vm.selectFork(mainnetFork);
+        //mainnetFork = vm.createFork(MAINNET_RPC_URL);
+        //vm.selectFork(mainnetFork);
 
         vm.deal(owner, 1000 ether);
         vm.deal(alice, 1000 ether);
@@ -31,7 +31,7 @@ contract VeritrustFactoryTest is Test {
         factory = new VeritrustFactory(deployFee, bidFee, address(oracle));
     }
 
-    function test_Create_Veristrust() public {
+    function test_Full_Veristrust_Without_Arbitration() public {
         string memory name = "Test";
         string memory ipfsUrl = "www.test.com.ar";
         uint128 commitDeadline = 172_800;
@@ -51,12 +51,22 @@ contract VeritrustFactoryTest is Test {
 
         vm.warp(block.timestamp + commitDeadline);
 
-        vm.startPrank(alice);
         console.log("balance veritrust", payable(veritrust).balance);
+        
+        vm.startPrank(alice);
         veritrust.revealBid("http://alice");
         console.log("balance veritrust reveal alice", payable(veritrust).balance);
+        
         vm.startPrank(bob);
         veritrust.revealBid("http://bob");
         console.log("balance veritrust reveal bob", payable(veritrust).balance);
+
+        vm.warp(block.timestamp + revealDeadline);
+
+        vm.startPrank(owner);
+        veritrust.choseWinner(bob);
+
+        assertEq(veritrust.winner(), bob);
+        assertEq(address(veritrust).balance, 0);
     }
 }
