@@ -12,3 +12,4 @@
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable.git
 [submodule "lib/erc-792"]
 	path = lib/erc-792
+	url = https://github.com/kleros/erc-792.git
