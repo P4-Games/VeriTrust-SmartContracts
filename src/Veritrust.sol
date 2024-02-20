@@ -27,15 +27,15 @@ contract Veritrust is Ownable {
     string public ipfsUrl;
     uint128 private commitDeadline;
     uint128 private revealDeadline;
-    address public winner;
-    mapping(address bidder => Bid bidData) private bids;
-    address[] private bidders;
     uint256 private startBid;
     uint256 public validBids;
-
-    address payable private factoryContract;
     uint256 private bidFee;
     uint256 public warrantyAmount;
+    address payable private factoryContract;
+    address public winner;
+
+    mapping(address bidder => Bid bidData) private bids;
+    address[] private bidders;
 
     event BidSet(address tender, address bidder);
     event BidRevealed(Bid bid);
@@ -43,11 +43,6 @@ contract Veritrust is Ownable {
     event CommitDeadlineExtended(uint256 newDeadline);
     event RevealDeadlineExtended(uint256 newDeadline);
     event BidCancelled();
-
-    error InvalidStatus();
-    error ReleasedTooEarly();
-    error ReclaimedTooLate();
-    error InsufficientPayment(uint256 _available, uint256 _required);
 
     modifier beforeCommitDeadline() {
         require(
