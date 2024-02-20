@@ -38,7 +38,7 @@ contract VeritrustFactoryTest is Test {
         uint128 revealDeadline = 172_800;
         uint256 warrantyAmount = 1 ether;
 
-        factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount, address(0));
+        factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
         Veritrust veritrust = factory.getContracts()[0];
 
         vm.startPrank(alice);
@@ -52,11 +52,11 @@ contract VeritrustFactoryTest is Test {
         vm.warp(block.timestamp + commitDeadline);
 
         console.log("balance veritrust", payable(veritrust).balance);
-        
+
         vm.startPrank(alice);
         veritrust.revealBid("http://alice");
         console.log("balance veritrust reveal alice", payable(veritrust).balance);
-        
+
         vm.startPrank(bob);
         veritrust.revealBid("http://bob");
         console.log("balance veritrust reveal bob", payable(veritrust).balance);

@@ -32,6 +32,7 @@ contract VeritrustFactory is Ownable {
     constructor(uint256 _deployFee, uint256 _bidFee, address _chainlinkAddress) {
         deployFee = _deployFee;
         bidFee = _bidFee;
+        
         // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 (Mainnet)
         // 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e (Goerli)
         dataFeed = AggregatorV3Interface(_chainlinkAddress);
@@ -48,12 +49,11 @@ contract VeritrustFactory is Ownable {
         string memory _ipfsUrl,
         uint128 _commitDeadline,
         uint128 _revealDeadline,
-        uint256 warrantyAmount,
-        address arbitrator
+        uint256 warrantyAmount
     ) public payable {
         require(msg.value == getDeployCost(), "Incorrect payment fee");
 
-        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount, arbitrator);
+        Veritrust veritrustContract = new Veritrust(msg.sender, _name, _ipfsUrl, _commitDeadline, _revealDeadline, bidFee, warrantyAmount);
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender, _name, _ipfsUrl);
