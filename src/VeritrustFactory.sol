@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
 import {Veritrust} from "./Veritrust.sol";
@@ -36,18 +36,15 @@ contract VeritrustFactory is Ownable {
     /// and Meta Pool Staking contract address.
     /// @param _deployFee The deployment fee to set. Amount must be in USD with 18 decimals (e.g.: 50 USD = 50000000000000000000)
     /// @param _bidFee The bid fee to set. Amount must be in USD with 18 decimals (e.g.: 5 USD = 5000000000000000000)
-    /// @param _chainlinkAddress The address of the Chainlink data feed contract.
+    /// @param _priceFeed The address of the Chainlink data feed contract.
     constructor(
         uint256 _deployFee,
         uint256 _bidFee,
-        address _chainlinkAddress
+        address _priceFeed
     ) {
         deployFee = _deployFee;
         bidFee = _bidFee;
-
-        // 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 (Mainnet)
-        // 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e (Goerli)
-        dataFeed = AggregatorV3Interface(_chainlinkAddress);
+        dataFeed = AggregatorV3Interface(_priceFeed);
     }
 
     /**

@@ -2,33 +2,30 @@
 pragma solidity ^0.8.19;
 
 import { Test, console } from "forge-std/Test.sol";
+import { HelperConfig } from "../script/HelperConfig.s.sol";
+import { DeployVeritrustFactory } from "../script/DeployVeritrustFactory.s.sol";
 import "../src/VeritrustFactory.sol";
 import { OracleMock } from "../src/OracleMock.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract VeritrustFactoryTest is Test {
-    address owner = makeAddr("owner");
+    address owner = address(uint160(vm.envUint("EOA_ADDRESS")));
     address alice = makeAddr("alice");
     address bob = makeAddr("bob");
 
-    VeritrustFactory factory;
-    OracleMock oracle;
-    uint256 deployFee = 1 ether;
-    uint256 bidFee = 1 ether;
-    //uint256 mainnetFork;
-    //string MAINNET_RPC_URL = "https://eth.llamarpc.com";
+    VeritrustFactory public factory;
+    HelperConfig public helperConfig;
+    OracleMock public oracle;
 
     function setUp() public {
-        //mainnetFork = vm.createFork(MAINNET_RPC_URL);
-        //vm.selectFork(mainnetFork);
+        // mainnetFork = vm.createFork(MAINNET_RPC_URL);
+        // vm.selectFork(mainnetFork);
+        DeployVeritrustFactory deployVeritrustFactory = new DeployVeritrustFactory();
+        (factory, helperConfig) = deployVeritrustFactory.run();
 
         vm.deal(owner, 1000 ether);
         vm.deal(alice, 1000 ether);
         vm.deal(bob, 1000 ether);
-        vm.startPrank(owner);
-
-        oracle = new OracleMock();
-        factory = new VeritrustFactory(deployFee, bidFee, address(oracle));
     }
 
     function test_Full_Veristrust_Without_Arbitration() public {
@@ -38,6 +35,7 @@ contract VeritrustFactoryTest is Test {
         uint128 revealDeadline = 172_800;
         uint256 warrantyAmount = 1 ether;
 
+        vm.startPrank(owner);
         factory.deployVeritrust{ value: factory.getDeployCost() }(name, ipfsUrl, commitDeadline, revealDeadline, warrantyAmount);
         Veritrust veritrust = factory.getContracts()[0];
 
