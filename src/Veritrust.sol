@@ -3,6 +3,21 @@ pragma solidity ^0.8.19;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+error AfterCommitDeadline();
+error PastCommitDeadline();
+error AfterRevealDeadline();
+error PastRevealDeadline();
+error TooManyBidders();
+error InsufficientBidFee();
+error BidAlreadyExists();
+error BidDoesNotExist();
+error BidAlreadyRevealed();
+error BidNotRevealed();
+error TransferFailed();
+error InvalidUrl();
+error ThereAreValidBids();
+error InvalidDeadline();
+
 interface IVeritrustFactory {
     function getLatestData() external view returns (int256);
 }
@@ -33,9 +48,8 @@ contract Veritrust is Ownable {
     uint256 public warrantyAmount;
     address payable private factoryContract;
     address public winner;
-
-    mapping(address bidder => Bid bidData) private bids;
     address[] private bidders;
+    mapping(address bidder => Bid bidData) private bids;
 
     event BidSet(address tender, address bidder);
     event BidRevealed(Bid bid);
@@ -45,34 +59,26 @@ contract Veritrust is Ownable {
     event BidCancelled();
 
     modifier beforeCommitDeadline() {
-        require(
-            block.timestamp < startBid + commitDeadline,
-            "Commit deadline has passed"
-        );
+        if (block.timestamp >= startBid + commitDeadline)
+            revert PastCommitDeadline();
         _;
     }
 
     modifier afterCommitDeadline() {
-        require(
-            block.timestamp >= startBid + commitDeadline,
-            "Wait until commit deadline"
-        );
+        if (block.timestamp < startBid + commitDeadline)
+            revert AfterCommitDeadline();
         _;
     }
 
     modifier beforeRevealDeadline() {
-        require(
-            block.timestamp < startBid + commitDeadline + revealDeadline,
-            "Reveal deadline has passed"
-        );
+        if (block.timestamp >= startBid + commitDeadline + revealDeadline)
+            revert PastRevealDeadline();
         _;
     }
 
     modifier afterRevealDeadline() {
-        require(
-            block.timestamp >= startBid + commitDeadline + revealDeadline,
-            "Wait until reveal deadline"
-        );
+        if (block.timestamp < startBid + commitDeadline + revealDeadline)
+            revert AfterRevealDeadline();
         _;
     }
 
@@ -95,14 +101,8 @@ contract Veritrust is Ownable {
         uint256 _bidFee,
         uint256 _warrantyAmount
     ) {
-        require(
-            _commitDeadline > 1 days,
-            "Commit deadline must be be greater than 1 day"
-        );
-        require(
-            _revealDeadline > 1 days,
-            "Reveal deadline must be greater than 1 day"
-        );
+        if (_commitDeadline <= 1 days || _revealDeadline <= 1 days)
+            revert DeadlineTooShort();
         transferOwnership(_owner);
         name = _name;
         ipfsUrl = _ipfsUrl;
@@ -123,12 +123,12 @@ contract Veritrust is Ownable {
         string memory _bidderName,
         bytes32 _urlHash
     ) external payable beforeCommitDeadline {
-        require(bidders.length < 101, "Up to 100 bidders");
+        if (bidders.length > 100) revert TooManyBidders();
         uint256 bidCost = getBidCost();
-        require(msg.value >= bidCost, "Insufficient bid fee");
+        if (msg.value < bidCost) revert InsufficientBidFee();
 
         Bid storage bid = bids[msg.sender];
-        require(bid.version == 0, "Bid already exists");
+        if (bid.version > 0) revert BidAlreadyExists();
 
         bid.timestamp = block.timestamp;
         bid.bidder = _bidderName;
@@ -144,13 +144,13 @@ contract Veritrust is Ownable {
         (bool success, ) = factoryContract.call{
             value: bidCost - warrantyAmount
         }("");
-        require(success, "Fee transfer fail");
+        if (!success) revert TransferFailed();
 
         if (msg.value > bidCost) {
             (success, ) = payable(msg.sender).call{value: msg.value - bidCost}(
                 ""
             );
-            require(success, "return excess transfer fail");
+            if (!success) revert TransferFailed();
         }
     }
 
@@ -160,7 +160,7 @@ contract Veritrust is Ownable {
      */
     function updateBid(bytes32 _urlHash) external beforeCommitDeadline {
         Bid storage bid = bids[msg.sender];
-        require(bid.version > 0, "Bid doesn't exist");
+        if (bid.version == 0) revert BidDoesNotExist();
 
         bid.timestamp = block.timestamp;
         bid.urlHash = _urlHash;
@@ -175,9 +175,11 @@ contract Veritrust is Ownable {
         string memory _url
     ) external afterCommitDeadline beforeRevealDeadline {
         Bid storage bid = bids[msg.sender];
-        require(bid.version > 0, "Bid doesnt exist");
-        require(bid.revealed == false, "Bid already revealed");
-        require(bytes32(keccak256(abi.encodePacked(_url))) == bid.urlHash);
+        if (bid.version == 0) revert BidDoesNotExist();
+        if (bid.revealed) revert BidAlreadyRevealed();
+        if (bytes32(keccak256(abi.encodePacked(_url))) != bid.urlHash)
+            revert InvalidUrl();
+
         bid.url = _url;
         bid.revealed = true;
         validBids++;
@@ -185,7 +187,7 @@ contract Veritrust is Ownable {
         emit BidRevealed(bid);
 
         (bool success, ) = payable(msg.sender).call{value: warrantyAmount}("");
-        require(success, "Warranty transfer failed");
+        if (!success) revert TransferFailed();
     }
 
     /**
@@ -195,30 +197,29 @@ contract Veritrust is Ownable {
     function choseWinner(
         address _winner
     ) external payable onlyOwner afterRevealDeadline {
-        require(bids[_winner].revealed == true, "Bid not revealed");
-
+        if(!bids[_winner].revealed) revert error BidNotRevealed();
+        
         winner = _winner;
-
         emit Winner(name, _winner, ipfsUrl);
 
+        // returns unrevealed warranty amounts to the bid's owner
         (bool success, ) = payable(msg.sender).call{
             value: address(this).balance
         }("");
-        require(success, "Transfer failed");
+        if (!success) revert TransferFailed();
     }
 
     /**
      * @dev If there are no active valid bids, it cancels the whole tender.
      */
     function cancelBids() public onlyOwner afterRevealDeadline {
-        require(validBids == 0, "There are valid bids");
-
+        if(validBids > 0) revert ThereAreValidBids();
         emit BidCancelled();
 
         (bool success, ) = payable(msg.sender).call{
             value: address(this).balance
         }("");
-        require(success, "Transfer failed");
+        if(!success) revert TransferFailed();
     }
 
     /**
@@ -228,10 +229,7 @@ contract Veritrust is Ownable {
     function extendCommitDeadline(
         uint128 _newDeadline
     ) public onlyOwner beforeCommitDeadline {
-        require(
-            _newDeadline > commitDeadline,
-            "Deadlines can only be extended"
-        );
+        if(_newDeadline <= commitDeadline) revert InvalidDeadline();
         commitDeadline = _newDeadline;
 
         emit CommitDeadlineExtended(startBid + _newDeadline);
@@ -244,10 +242,7 @@ contract Veritrust is Ownable {
     function extendRevealDeadline(
         uint128 _newDeadline
     ) public onlyOwner beforeRevealDeadline {
-        require(
-            _newDeadline > revealDeadline,
-            "Deadlines can only be extended"
-        );
+        if(_newDeadline <= revealDeadline) revert InvalidDeadline();
         revealDeadline = _newDeadline;
 
         emit RevealDeadlineExtended(startBid + commitDeadline + _newDeadline);
