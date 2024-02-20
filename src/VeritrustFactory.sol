@@ -5,6 +5,9 @@ import {Veritrust} from "./Veritrust.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
+error IncorrectFee();
+error TransferFailed();
+
 /**
  * @title VeritrustFactory
  * @dev This contract acts as a factory for creating Veritrust contracts.
@@ -60,7 +63,7 @@ contract VeritrustFactory is Ownable {
         uint128 _revealDeadline,
         uint256 warrantyAmount
     ) public payable {
-        require(msg.value == getDeployCost(), "Incorrect payment fee");
+        if(msg.value != getDeployCost()) revert IncorrectFee();
 
         Veritrust veritrustContract = new Veritrust(
             msg.sender,
@@ -79,7 +82,7 @@ contract VeritrustFactory is Ownable {
     function withdrawBalance() external onlyOwner {
         uint256 balance = address(this).balance;
         (bool success, ) = payable(msg.sender).call{value: balance}("");
-        require(success, "Transfer failed");
+        if(!success) revert TransferFailed();
 
         emit FundsWithdrawn(balance);
     }

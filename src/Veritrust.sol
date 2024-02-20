@@ -7,6 +7,7 @@ error AfterCommitDeadline();
 error PastCommitDeadline();
 error AfterRevealDeadline();
 error PastRevealDeadline();
+error DeadlineTooShort();
 error TooManyBidders();
 error InsufficientBidFee();
 error BidAlreadyExists();
@@ -101,8 +102,7 @@ contract Veritrust is Ownable {
         uint256 _bidFee,
         uint256 _warrantyAmount
     ) {
-        if (_commitDeadline <= 1 days || _revealDeadline <= 1 days)
-            revert DeadlineTooShort();
+        if (_commitDeadline <= 1 days || _revealDeadline <= 1 days) revert DeadlineTooShort();
         transferOwnership(_owner);
         name = _name;
         ipfsUrl = _ipfsUrl;
@@ -197,7 +197,7 @@ contract Veritrust is Ownable {
     function choseWinner(
         address _winner
     ) external payable onlyOwner afterRevealDeadline {
-        if(!bids[_winner].revealed) revert error BidNotRevealed();
+        if(!bids[_winner].revealed) revert BidNotRevealed();
         
         winner = _winner;
         emit Winner(name, _winner, ipfsUrl);
