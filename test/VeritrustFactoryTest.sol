@@ -49,15 +49,11 @@ contract VeritrustFactoryTest is Test {
 
         vm.warp(block.timestamp + commitDeadline);
 
-        console.log("balance veritrust", payable(veritrust).balance);
-
         vm.startPrank(alice);
         veritrust.revealBid("http://alice");
-        console.log("balance veritrust reveal alice", payable(veritrust).balance);
 
         vm.startPrank(bob);
         veritrust.revealBid("http://bob");
-        console.log("balance veritrust reveal bob", payable(veritrust).balance);
 
         vm.warp(block.timestamp + revealDeadline);
 
