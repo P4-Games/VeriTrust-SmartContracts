@@ -19,6 +19,8 @@ contract HelperConfig is Script {
       activeNetworkConfig = getMainnetNetworkConfig();
     } else if(block.chainid == 5){
       activeNetworkConfig = getGoerliNetworkConfig();
+    } else if(block.chainid == 11155111){
+      activeNetworkConfig = getSepoliaNetworkConfig();
     } else {
       activeNetworkConfig = getLocalNetworkConfig();
     }
@@ -35,6 +37,14 @@ contract HelperConfig is Script {
   function getGoerliNetworkConfig() public pure returns (NetworkConfig memory goerliNetworkConfig) {
     goerliNetworkConfig = NetworkConfig({
       priceFeed: 0xD4a33860578De61DBAbDc8BFdb98FD742fA7028e,
+      deployFee: 5e19, // 50 usd
+      bidFee: 5e18 // 5 usd
+    });
+  }
+
+  function getSepoliaNetworkConfig() public pure returns (NetworkConfig memory sepoliaNetworkConfig) {
+    sepoliaNetworkConfig = NetworkConfig({
+      priceFeed: 0x694AA1769357215DE4FAC081bf1f309aDC325306,
       deployFee: 5e19, // 50 usd
       bidFee: 5e18 // 5 usd
     });
