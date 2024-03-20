@@ -12,11 +12,12 @@ contract DeployVeritrustFactory is Script {
 
     function run() external returns(VeritrustFactory, HelperConfig){
       HelperConfig helperConfig = new HelperConfig();
-      (address priceFeed, uint256 deployFee, uint256 bidFee)= helperConfig.activeNetworkConfig();
+      (address priceFeed, uint256 deployFee, uint256 bidFee) = helperConfig.activeNetworkConfig();
       
       vm.startBroadcast(deployerPrivateKey);
       VeritrustFactory veritrustFactory = new VeritrustFactory(deployFee, bidFee, priceFeed);
       vm.stopBroadcast();
+      
       return (veritrustFactory, helperConfig);
     }
 }

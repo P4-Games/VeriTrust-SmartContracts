@@ -59,7 +59,7 @@ contract VeritrustFactory is Ownable {
         uint128 _commitDeadline,
         uint128 _revealDeadline,
         uint256 warrantyAmount
-    ) public payable {
+    ) public payable returns (Veritrust){
         if(msg.value != getDeployCost()) revert IncorrectFee();
 
         Veritrust veritrustContract = new Veritrust(
@@ -74,6 +74,7 @@ contract VeritrustFactory is Ownable {
         veritrustContracts.push(veritrustContract);
 
         emit ContractDeployed(veritrustContract, msg.sender, _name, _ipfsUrl);
+        return veritrustContract;
     }
 
     function withdrawBalance() external onlyOwner {
